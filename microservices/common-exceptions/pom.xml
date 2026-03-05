@@ -6,7 +6,7 @@
 		<groupId>com.mmenendez</groupId>
 		<artifactId>microservices</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
-		<relativePath/> <!-- lookup parent from repository -->
+		<relativePath>../pom.xml</relativePath>
 	</parent>
 	<groupId>com.mmenendez</groupId>
 	<artifactId>common-exceptions</artifactId>
