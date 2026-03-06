@@ -1,5 +1,5 @@
 spring:
   application:
-    name: product-microservice
+    name: cart-microservice
   config:
     import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}
