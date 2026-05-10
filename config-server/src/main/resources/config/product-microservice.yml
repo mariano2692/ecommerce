@@ -7,8 +7,11 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
-    hibernate:  
-      ddl-auto: update
+    hibernate:
+      # "none" means Hibernate does not touch the schema at all. Flyway is solely
+      # responsible for creating and evolving tables. Using "update" in production
+      # is dangerous: Hibernate can silently alter or drop columns across deployments.
+      ddl-auto: none
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
 eureka:
@@ -22,20 +25,24 @@ logging:
     root: INFO
     com.irojas.microservices: WARN
   pattern:
-    console: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
-    file: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+    console: '%d{yyyy-MM-dd HH:mm:ss} [%X{traceId:-},%X{spanId:-}] [%thread] %-5level %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss} [%X{traceId:-},%X{spanId:-}] [%thread] %-5level %logger{36} - %msg%n'
   file:
     name: logs/product-microservice.log
     max-size: 10MB
     max-history: 30
 
-
-
-management: 
-    endpoints:
-        web:
-            exposure:
-                include: health, info, prometheus
-    endpoint:
-        health:
-            show-details: always 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: always
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_BASE_URL:http://localhost:9411}/api/v2/spans
+  tracing:
+    sampling:
+      probability: 1.0

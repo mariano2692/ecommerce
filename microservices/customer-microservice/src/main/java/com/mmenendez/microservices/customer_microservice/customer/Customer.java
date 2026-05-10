@@ -22,5 +22,7 @@ public class Customer {
     private String phone;
     private String address;
     private String city;
+    private String password;
+    private Role role;
 
 }

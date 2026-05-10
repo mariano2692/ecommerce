@@ -2,12 +2,18 @@ package com.mmenendez.product_microservice.category;
 
 import org.springframework.stereotype.Service;
 
-import com.mmenendez.product_microservice.product.ProductResponse;
+import com.mmenendez.product_microservice.product.ProductMapper;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class CategoryMapper {
-        public Category toCategory(CategoryRequest request) {
-       return  Category.builder()
+
+    private final ProductMapper productMapper;
+
+    public Category toCategory(CategoryRequest request) {
+        return Category.builder()
                 .id(request.id())
                 .name(request.name())
                 .description(request.description())
@@ -15,22 +21,12 @@ public class CategoryMapper {
     }
 
     public CategoryResponse toCategoryResponse(Category category) {
-       return new CategoryResponse(
+        return new CategoryResponse(
                 category.getId(),
                 category.getName(),
                 category.getDescription(),
                 category.getProducts().stream()
-                        .map(product -> new ProductResponse(
-                                product.getId(),
-                                product.getName(),
-                                product.getDescription(),
-                                product.getPrice(),
-                                product.getStock(),
-                                product.getImageUrl(),
-                                product.getCategory().getId(),
-                                product.getCategory().getName(),
-                                product.getCategory().getDescription(
-                        )))
+                        .map(productMapper::toProductResponse)
                         .toList()
         );
     }

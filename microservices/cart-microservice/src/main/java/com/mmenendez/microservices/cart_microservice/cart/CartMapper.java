@@ -16,7 +16,7 @@ public class CartMapper {
 
         for (CartItem item : cart.getItems()) {
             cartItemResponses.add(new CartItemResponse(
-                item.getProductId(),
+                item.getVariantId(),
                 item.getQuantity()
             ));
         }

@@ -24,14 +24,14 @@ public class CartItemService {
 
     public String addItemToCart(String customerId, CartItemRequest cartItemRequest) {
 
-        CustomerResponse customerResponse= customerClient.getCustomerById(customerId)
-            .orElseThrow(() -> new CartException("Customer whit id " + customerId + " does not exist"));
+        CustomerResponse customerResponse = customerClient.getCustomerById(customerId)
+            .orElseThrow(() -> new CartException("Customer with id " + customerId + " does not exist"));
 
-        ProductResponse productResponse = productClient.getProductById(cartItemRequest.productId())
-            .orElseThrow(() -> new CartException("Product whit id " + cartItemRequest.productId() + " does not exist"));
-           
-        if (productResponse.stock() < cartItemRequest.quantity()) {
-            throw new CartException("Product whit id " + cartItemRequest.productId() + " does not have enough stock");
+        ProductResponse variant = productClient.getVariantById(cartItemRequest.variantId())
+            .orElseThrow(() -> new CartException("Variant with id " + cartItemRequest.variantId() + " does not exist"));
+
+        if (variant.stock() < cartItemRequest.quantity()) {
+            throw new CartException("Variant with id " + cartItemRequest.variantId() + " does not have enough stock");
         }
 
         Cart cart = cartRepository.findByCustomerId(customerResponse.id())
@@ -41,22 +41,21 @@ public class CartItemService {
                 .build()
             );
 
-        boolean productExists = cart.getItems().stream()
-            .anyMatch(item -> item.getProductId().equals(cartItemRequest.productId()));
-            
-        if (productExists) {
-            throw new CartException("Product whit id " + cartItemRequest.productId() + " is already in the cart");
+        boolean variantExists = cart.getItems().stream()
+            .anyMatch(item -> item.getVariantId().equals(cartItemRequest.variantId()));
+
+        if (variantExists) {
+            throw new CartException("Variant with id " + cartItemRequest.variantId() + " is already in the cart");
         }
 
         cart.getItems().add(
             CartItem.builder()
-                .productId(cartItemRequest.productId())
+                .variantId(cartItemRequest.variantId())
                 .quantity(cartItemRequest.quantity())
                 .build()
         );
 
         cartRepository.save(cart);
-
         return cart.getId();
     }
 
@@ -66,30 +65,31 @@ public class CartItemService {
             .orElseThrow(() -> new CartException("Cart for customer with id " + customerId + " does not exist"));
 
         CartItem itemToUpdate = cart.getItems().stream()
-            .filter(item -> item.getProductId()== cartItemRequest.productId())
+            .filter(item -> item.getVariantId().equals(cartItemRequest.variantId()))
             .findFirst()
-            .orElseThrow(() -> new CartException("Product with id " + cartItemRequest.productId() + " is not in the cart"));
-    
-        if (productClient.getProductById(cartItemRequest.productId()).get().stock() < cartItemRequest.quantity()) {
-            throw new CartException("Product whit id " + cartItemRequest.productId() + " does not have enough stock");
+            .orElseThrow(() -> new CartException("Variant with id " + cartItemRequest.variantId() + " is not in the cart"));
+
+        ProductResponse variant = productClient.getVariantById(cartItemRequest.variantId())
+            .orElseThrow(() -> new CartException("Variant with id " + cartItemRequest.variantId() + " does not exist"));
+
+        if (variant.stock() < cartItemRequest.quantity()) {
+            throw new CartException("Variant with id " + cartItemRequest.variantId() + " does not have enough stock");
         }
 
         itemToUpdate.setQuantity(cartItemRequest.quantity());
-        
         cartRepository.save(cart);
     }
 
-    public void removeItemFromCart(String customerId, Integer productId) {
+    public void removeItemFromCart(String customerId, Integer variantId) {
         Cart cart = cartRepository.findByCustomerId(customerId)
                 .orElseThrow(() -> new CartException("Cart for customer with id " + customerId + " does not exist"));
-        
+
         CartItem itemToRemove = cart.getItems().stream()
-            .filter(item -> item.getProductId()== productId)
+            .filter(item -> item.getVariantId().equals(variantId))
             .findFirst()
-            .orElseThrow(() -> new CartException("Product with id " + productId + " is not in the cart"));
+            .orElseThrow(() -> new CartException("Variant with id " + variantId + " is not in the cart"));
 
         cart.getItems().remove(itemToRemove);
         cartRepository.save(cart);
-      
     }
 }

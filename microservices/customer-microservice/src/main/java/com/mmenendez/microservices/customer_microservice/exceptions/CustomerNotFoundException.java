@@ -1,10 +1,8 @@
 package com.mmenendez.microservices.customer_microservice.exceptions;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
+public class CustomerNotFoundException extends RuntimeException {
 
-@EqualsAndHashCode(callSuper = true)
-@Data
-public class CustomerNotFoundException extends RuntimeException{
-    private final String message;
+    public CustomerNotFoundException(String message) {
+        super(message);
+    }
 }

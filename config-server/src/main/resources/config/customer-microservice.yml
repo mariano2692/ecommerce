@@ -14,26 +14,39 @@ logging:
     root: INFO
     com.irojas.microservices: WARN
   pattern:
-    console: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
-    file: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+    console: '%d{yyyy-MM-dd HH:mm:ss} [%X{traceId:-},%X{spanId:-}] [%thread] %-5level %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss} [%X{traceId:-},%X{spanId:-}] [%thread] %-5level %logger{36} - %msg%n'
   file:
     name: logs/customer-microservice.log
     max-size: 10MB
     max-history: 30
 
-
-
+app:
+  jwt:
+    # No fallback value intentionally. If JWT_SECRET is not set the application
+    # refuses to start rather than running with an insecure placeholder key.
+    # Must be the same value as in api-gateway.yml — both services verify the same tokens.
+    # Generate a value with: openssl rand -base64 48
+    secret: ${JWT_SECRET}
+    # 86400000 ms = 24 hours. When the token expires the user is forced to log in again
+    # because there is no refresh token flow implemented yet. Reduce this value once
+    # refresh tokens are added — long-lived tokens increase the window of a stolen token.
+    expiration-ms: 86400000
 
 server:
   port: 8091
 
-
-
-management: 
-    endpoints:
-        web:
-            exposure:
-                include: health, info, prometheus
-    endpoint:
-        health:
-            show-details: always 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: always
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_BASE_URL:http://localhost:9411}/api/v2/spans
+  tracing:
+    sampling:
+      probability: 1.0

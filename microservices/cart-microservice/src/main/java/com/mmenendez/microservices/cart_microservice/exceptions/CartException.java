@@ -1,10 +1,8 @@
 package com.mmenendez.microservices.cart_microservice.exceptions;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-
-@EqualsAndHashCode(callSuper = true)
-@Data
 public class CartException extends RuntimeException {
-    private final String message;
+
+    public CartException(String message) {
+        super(message);
+    }
 }

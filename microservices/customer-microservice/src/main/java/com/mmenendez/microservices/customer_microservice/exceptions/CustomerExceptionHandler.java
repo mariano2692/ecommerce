@@ -20,14 +20,18 @@ import lombok.extern.slf4j.Slf4j;
 public class CustomerExceptionHandler extends GlobalExceptionHandler {
 
     @ExceptionHandler(CustomerNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handle (CustomerNotFoundException exception)
-    {
-      
+    public ResponseEntity<ErrorResponse> handle(CustomerNotFoundException exception) {
         var errors = new HashMap<String, String>();
-        var fieldName = "customer";
-        errors.put(fieldName, exception.getMessage());
-        log.warn("Customer not found: {}" , exception.toString());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(errors)); 
+        errors.put("customer", exception.getMessage());
+        log.warn("Customer not found: {}", exception.toString());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(errors));
+    }
 
+    @ExceptionHandler(CustomerAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handle(CustomerAlreadyExistsException exception) {
+        var errors = new HashMap<String, String>();
+        errors.put("email", exception.getMessage());
+        log.warn("Customer already exists: {}", exception.toString());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(errors));
     }
 }

@@ -1,0 +1,126 @@
+# HTTP server — only purpose is to redirect to HTTPS and serve the ACME challenge.
+# The ACME challenge (.well-known/acme-challenge) must be reachable over plain HTTP
+# because Let's Encrypt contacts the domain on port 80 to verify domain ownership
+# before issuing or renewing a certificate. Every other request is redirected immediately.
+server {
+    listen 80;
+    server_name ${DOMAIN_NAME};
+
+    location /.well-known/acme-challenge/ {
+        # Must match the volume mount defined in docker-compose.yml for the certbot container.
+        # Changing this path without updating the compose file breaks the ACME challenge
+        # and prevents Let's Encrypt from issuing or renewing the certificate.
+        root /var/www/certbot;
+    }
+
+    location / {
+        # 301 is intentional over 302: a permanent redirect is cached by browsers,
+        # so repeat visitors skip the HTTP round-trip entirely on future requests.
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS server — sole entry point for all API traffic.
+# The api-gateway port is bound to 127.0.0.1 in docker-compose so that this block
+# is the only path from the internet to the application; port 8222 is unreachable externally.
+server {
+    # http2 enables HTTP/2 for all HTTPS connections on this server block.
+    # HTTP/2 multiplexes multiple requests over a single TCP connection and compresses
+    # headers with HPACK, reducing latency for frontends that load several API resources
+    # in parallel. It requires HTTPS, so it cannot be enabled on the port 80 block above.
+    listen 443 ssl http2;
+    server_name ${DOMAIN_NAME};
+
+    # fullchain.pem includes the leaf certificate AND the intermediate CA chain.
+    # Using cert.pem (leaf only) causes TLS handshake failures on clients that do not
+    # have Let's Encrypt's intermediate certificate cached, such as older Android versions.
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN_NAME}/privkey.pem;
+
+    # TLS 1.0 and 1.1 are deprecated (RFC 8996) and vulnerable to BEAST and POODLE attacks.
+    # DHE-RSA-AES128-GCM-SHA256 was removed from the Mozilla Intermediate profile in 2022
+    # because every modern browser supports ECDHE, and DHE requires generating DH parameters
+    # (ssl_dhparam) which adds operational overhead with no practical benefit.
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+
+    # "off" means the client chooses the cipher, not the server.
+    # Modern clients always pick strong ciphers, and TLS 1.3 removes server preference entirely,
+    # so deferring to the client avoids penalizing well-configured browsers.
+    ssl_prefer_server_ciphers off;
+
+    # Session resumption lets returning clients skip the full TLS handshake, reducing latency.
+    # Tickets are disabled because a compromised ticket key can decrypt past sessions,
+    # breaking forward secrecy. The session cache is safer: it lives only in server memory
+    # and expires with the process.
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # OCSP stapling eliminates the extra round-trip browsers make to Let's Encrypt's OCSP
+    # server to check whether the certificate has been revoked. With stapling enabled, nginx
+    # fetches and caches that response itself, then includes it in the TLS handshake.
+    # chain.pem contains the intermediate CA certificate needed to verify the OCSP response.
+    ssl_stapling        on;
+    ssl_stapling_verify on;
+    ssl_trusted_certificate /etc/letsencrypt/live/${DOMAIN_NAME}/chain.pem;
+
+    # DNS resolver nginx uses to look up the OCSP responder hostname from the certificate.
+    # Google's public DNS is used here; replace with your hosting provider's resolver if
+    # outbound DNS to 8.8.8.8 is restricted in your environment.
+    resolver 8.8.8.8 8.8.4.4 valid=300s;
+    resolver_timeout 5s;
+
+    # HSTS instructs browsers to refuse plain HTTP connections to this domain for 2 years.
+    # Do NOT add includeSubDomains or preload until every subdomain is also on HTTPS:
+    # those flags are cached in browsers globally and are nearly impossible to reverse
+    # if a subdomain later needs plain HTTP.
+    add_header Strict-Transport-Security "max-age=63072000"   always;
+
+    # Prevents browsers from guessing a response's content type when the server omits it.
+    # Without this, a browser might execute a JSON response as a script (MIME sniffing attack).
+    add_header X-Content-Type-Options    "nosniff"            always;
+
+    # Prevents this site from being embedded in an <iframe> on another domain, blocking
+    # clickjacking attacks where an attacker overlays the page inside a transparent frame.
+    add_header X-Frame-Options           "DENY"               always;
+
+    # Explicitly disables the legacy XSS auditor built into older browsers (IE, early Chrome).
+    # The value "0" is the modern recommendation: the auditor had known bypasses and was
+    # removed from Chrome entirely; leaving it enabled can introduce new vulnerabilities.
+    add_header X-XSS-Protection          "0"                  always;
+
+    # nginx rejects request bodies larger than this with 413 before the request reaches
+    # the api-gateway. The default (1MB) is too small for e-commerce payloads: a product
+    # with a rich description or an order with many line items can exceed it easily.
+    client_max_body_size 10m;
+
+    location / {
+        proxy_pass http://api-gateway:8222;
+
+        # HTTP/1.1 is required to support keep-alive connections to the upstream.
+        # HTTP/1.0 (nginx's default for proxying) closes the connection after each request,
+        # which defeats connection pooling in Spring WebFlux's Netty server.
+        proxy_http_version 1.1;
+
+        # Preserve the original client IP so rate limiting and audit logs in the api-gateway
+        # reflect the real caller's address, not the nginx container's internal Docker IP.
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Required to keep WebSocket and Server-Sent Event connections alive through the proxy.
+        # Without these, nginx treats the connection as a plain HTTP request and closes it
+        # after the first response, breaking long-lived reactive streams in Spring WebFlux.
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # The checkout flow executes a saga across 4 services (customer, cart, stock, payment).
+        # The default proxy_read_timeout of 60s is not enough if any downstream service is slow.
+        # 120s matches the Resilience4j circuit breaker timeout configured in order-microservice.
+        proxy_connect_timeout 10s;
+        proxy_read_timeout    120s;
+        proxy_send_timeout    120s;
+    }
+}

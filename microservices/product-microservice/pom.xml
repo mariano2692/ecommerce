@@ -24,6 +24,18 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Flyway manages schema versioning. flyway-database-postgresql is required
+		     as a separate module starting from Flyway 10, which is the version bundled
+		     with Spring Boot 3.3+. Without it, Flyway silently skips PostgreSQL support. -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>com.mmenendez</groupId>
 			<artifactId>common-exceptions</artifactId>

@@ -1,11 +1,10 @@
 package com.mmenendez.product_microservice.category;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
-public record CategoryRequest(    
+public record CategoryRequest(
     Integer id,
-    @NotNull(message = "Category name is required")
+    @NotBlank(message = "Category name is required")
     String name,
-    String description) {
-
-}
+    String description
+) {}

@@ -10,6 +10,6 @@ import lombok.NoArgsConstructor;
 @Data
 @Builder
 public class CartItem {
-    private Integer productId;
+    private Integer variantId;
     private Integer quantity;
 }

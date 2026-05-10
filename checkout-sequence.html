@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Diagrama de Secuencia — Checkout Flow</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 40px;
+    }
+
+    .cover {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: white;
+      padding: 60px 40px;
+      border-radius: 12px;
+      margin-bottom: 40px;
+    }
+    .cover h1 { font-size: 2.4rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.5px; }
+    .cover h2 { font-size: 1.3rem; font-weight: 400; opacity: 0.75; margin-bottom: 32px; }
+    .cover-meta { display: flex; gap: 40px; flex-wrap: wrap; }
+    .meta-item { display: flex; flex-direction: column; gap: 4px; }
+    .meta-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.55; }
+    .meta-value { font-size: 1rem; font-weight: 600; opacity: 0.9; }
+
+    .description-card {
+      background: white; border-radius: 10px; padding: 28px 32px;
+      margin-bottom: 36px; border-left: 4px solid #0f3460;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .description-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; color: #0f3460; }
+    .description-card p { font-size: 0.92rem; line-height: 1.7; color: #444; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 36px; }
+    .legend-item {
+      display: flex; align-items: center; gap: 8px; background: white;
+      border-radius: 6px; padding: 8px 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      font-size: 0.82rem; font-weight: 500;
+    }
+    .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+    .dot-gateway  { background: #e63946; }
+    .dot-order    { background: #2a9d8f; }
+    .dot-customer { background: #457b9d; }
+    .dot-cart     { background: #f4a261; }
+    .dot-product  { background: #6a4c93; }
+    .dot-payment  { background: #2dc653; }
+    .dot-kafka    { background: #e9c46a; }
+    .dot-notif    { background: #ee6c4d; }
+    .dot-infra    { background: #adb5bd; }
+
+    .section-title {
+      font-size: 1.3rem; font-weight: 700; color: #0f3460;
+      margin-bottom: 20px; padding-bottom: 8px; border-bottom: 2px solid #e8edf5;
+    }
+
+    .diagram-container {
+      background: white; border-radius: 12px; padding: 32px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 40px; overflow-x: auto;
+    }
+
+    .error-flows {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px; margin-bottom: 40px;
+    }
+    .error-card { background: white; border-radius: 10px; padding: 22px 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .error-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .error-badge { background: #ffebe9; color: #cf222e; font-size: 0.7rem; padding: 2px 7px; border-radius: 10px; font-weight: 700; }
+    .error-card ol { padding-left: 18px; }
+    .error-card li { font-size: 0.82rem; color: #555; line-height: 1.7; }
+    .error-card code { background: #f5f5f5; padding: 1px 5px; border-radius: 3px; font-size: 0.78rem; color: #cf222e; }
+
+    .stack-table {
+      width: 100%; border-collapse: collapse; margin-bottom: 40px;
+      background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .stack-table th { background: #0f3460; color: white; padding: 12px 16px; text-align: left; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stack-table td { padding: 11px 16px; font-size: 0.85rem; border-bottom: 1px solid #f0f0f0; color: #333; }
+    .stack-table tr:last-child td { border-bottom: none; }
+    .stack-table tr:nth-child(even) td { background: #fafbfc; }
+    .port-badge { background: #e8f4fd; color: #0f3460; padding: 2px 8px; border-radius: 4px; font-family: monospace; font-size: 0.8rem; font-weight: 600; }
+    .tech-badge { background: #f0f0f0; color: #555; padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; }
+
+    .print-btn {
+      display: block; width: fit-content; margin: 0 auto 40px;
+      background: #0f3460; color: white; border: none; padding: 14px 36px;
+      border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;
+      letter-spacing: 0.3px; transition: background 0.2s;
+    }
+    .print-btn:hover { background: #16213e; }
+
+    @media print {
+      body { background: white; }
+      .print-btn { display: none; }
+      .page { padding: 20px; max-width: none; }
+      .cover { page-break-after: always; border-radius: 0; }
+      .diagram-container { page-break-before: always; box-shadow: none; border: 1px solid #ddd; }
+      .error-flows { page-break-inside: avoid; }
+    }
+
+    @page { size: A3 landscape; margin: 15mm; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <h1>Ecommerce Microservices</h1>
+    <h2>Diagrama de Secuencia — Flujo de Checkout</h2>
+    <div class="cover-meta">
+      <div class="meta-item">
+        <span class="meta-label">Endpoint</span>
+        <span class="meta-value">POST /api/v1/orders/checkout/{customerId}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Stack</span>
+        <span class="meta-value">Java 21 · Spring Boot 4.0.3 · Spring Cloud 2025.1.0</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Patron</span>
+        <span class="meta-value">Saga con compensacion (orquestacion sincrona)</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Servicios involucrados</span>
+        <span class="meta-value">7 microservicios + Kafka + Redis + Eureka</span>
+      </div>
+    </div>
+  </div>
+
+  <button class="print-btn" onclick="window.print()">Imprimir / Guardar como PDF</button>
+
+  <div class="description-card">
+    <h3>Por que es el flujo mas complejo</h3>
+    <p>
+      El checkout es una <strong>transaccion distribuida</strong> que cruza 5 microservicios de forma sincrona (Feign)
+      y desencadena un flujo asincrono adicional via Kafka. Implementa el patron <strong>Saga con compensacion</strong>:
+      si cualquier paso falla despues de haber modificado estado (stock descontado, carrito limpiado),
+      la saga ejecuta pasos compensatorios para restablecer la consistencia. Ademas involucra
+      <strong>JWT validation</strong>, <strong>rate limiting</strong> en Redis, <strong>load balancing</strong> via Eureka,
+      <strong>pessimistic locking</strong> en PostgreSQL para evitar race conditions de stock, y el patron <strong>Strategy</strong>
+      para notificaciones multicanal (Email + WhatsApp via Twilio).
+    </p>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot dot-gateway"></div>API Gateway</div>
+    <div class="legend-item"><div class="legend-dot dot-order"></div>Order MS</div>
+    <div class="legend-item"><div class="legend-dot dot-customer"></div>Customer MS</div>
+    <div class="legend-item"><div class="legend-dot dot-cart"></div>Cart MS</div>
+    <div class="legend-item"><div class="legend-dot dot-product"></div>Product MS</div>
+    <div class="legend-item"><div class="legend-dot dot-payment"></div>Payment MS</div>
+    <div class="legend-item"><div class="legend-dot dot-kafka"></div>Kafka (async)</div>
+    <div class="legend-item"><div class="legend-dot dot-notif"></div>Notification MS</div>
+    <div class="legend-item"><div class="legend-dot dot-infra"></div>Infraestructura</div>
+  </div>
+
+  <h2 class="section-title">Servicios involucrados</h2>
+  <table class="stack-table">
+    <thead>
+      <tr>
+        <th>Servicio</th><th>Puerto</th><th>DB</th><th>Rol en el checkout</th><th>Comunicacion</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>API Gateway</strong></td>
+        <td><span class="port-badge">:8222</span></td>
+        <td><span class="tech-badge">Redis</span></td>
+        <td>Valida JWT, rate limiting, load balancing, propaga headers</td>
+        <td>Sincrona (entry point)</td>
+      </tr>
+      <tr>
+        <td><strong>Order MS</strong></td>
+        <td><span class="port-badge">:8094</span></td>
+        <td><span class="tech-badge">PostgreSQL</span></td>
+        <td>Orquesta toda la saga: crea orden, coordina stock, pago y carrito</td>
+        <td>Feign a 4 servicios</td>
+      </tr>
+      <tr>
+        <td><strong>Customer MS</strong></td>
+        <td><span class="port-badge">:8091</span></td>
+        <td><span class="tech-badge">MongoDB</span></td>
+        <td>Valida que el cliente existe (Order MS y Notification MS lo consultan)</td>
+        <td>Feign (receptor)</td>
+      </tr>
+      <tr>
+        <td><strong>Cart MS</strong></td>
+        <td><span class="port-badge">:8093</span></td>
+        <td><span class="tech-badge">MongoDB</span></td>
+        <td>Provee los items del carrito y lo limpia al confirmar el pago</td>
+        <td>Feign (receptor)</td>
+      </tr>
+      <tr>
+        <td><strong>Product MS</strong></td>
+        <td><span class="port-badge">:8092</span></td>
+        <td><span class="tech-badge">PostgreSQL</span></td>
+        <td>Enriquece items con precio/SKU, descuenta stock (pessimistic lock), restock en compensacion</td>
+        <td>Feign (receptor)</td>
+      </tr>
+      <tr>
+        <td><strong>Payment MS</strong></td>
+        <td><span class="port-badge">:8095</span></td>
+        <td><span class="tech-badge">PostgreSQL</span></td>
+        <td>Procesa el pago y publica el evento a Kafka</td>
+        <td>Feign (receptor) + Kafka (productor)</td>
+      </tr>
+      <tr>
+        <td><strong>Notification MS</strong></td>
+        <td><span class="port-badge">:8096</span></td>
+        <td><span class="tech-badge">MongoDB</span></td>
+        <td>Consume evento de Kafka, envia email (SMTP) y WhatsApp (Twilio)</td>
+        <td>Kafka (consumidor) + Feign a Customer MS</td>
+      </tr>
+      <tr>
+        <td><strong>Eureka</strong></td>
+        <td><span class="port-badge">:8761</span></td>
+        <td>—</td>
+        <td>Service discovery para load balancing</td>
+        <td>Registro / consulta</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 class="section-title">Diagrama de secuencia — Happy Path</h2>
+  <div class="diagram-container">
+    <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as Cliente
+    participant GW as API Gateway
+    participant RD as Redis
+    participant EU as Eureka
+    participant OC as OrderController
+    participant OS as OrderService
+    participant ODB as DB Orders
+    participant CUS as Customer MS
+    participant CUSDB as DB Customers
+    participant CAR as Cart MS
+    participant CARDB as DB Cart
+    participant PRO as Product MS
+    participant PRODB as DB Products
+    participant PAY as Payment MS
+    participant PAYDB as DB Payments
+    participant KF as Kafka
+    participant NS as Notification MS
+    participant NODB as DB Notifications
+    participant SMTP as SMTP Server
+    participant TW as Twilio API
+
+    C->>GW: POST /api/v1/orders/checkout/:customerId + Bearer token
+
+    Note over GW: AuthHeaderFilter orden=-1
+    GW->>GW: Elimina X-Customer-Id y X-Customer-Role del request entrante
+    GW->>GW: JwtUtil.isValid - verifica firma y expiracion del token
+    GW->>GW: extractClaims - sub=customerId role=CUSTOMER
+    GW->>GW: Agrega X-Customer-Id y X-Customer-Role al request mutado
+
+    Note over GW,RD: Rate Limiter - Redis token bucket
+    GW->>RD: Consume token por IP - limite 2 req/s burst 5 para /orders
+    RD-->>GW: Token disponible OK
+
+    Note over GW,EU: Spring Cloud LoadBalancer
+    GW->>EU: Resolver instancias de ORDER-MICROSERVICE
+    EU-->>GW: Retorna instancia order-microservice puerto 8094
+    GW->>GW: Round-robin selecciona la instancia
+
+    GW->>OC: POST /api/v1/orders/checkout/:customerId con headers propagados
+    Note over OC: Lee X-Customer-Id del header
+    OC->>OS: checkout(customerId, checkoutRequest, requestingCustomerId)
+
+    Note over OS: Paso 1 - Autorizacion del caller
+    OS->>OS: Verifica que requestingCustomerId sea igual a customerId
+
+    Note over OS: Paso 2 - Validar cliente via Feign critico
+    OS->>CUS: GET /api/v1/customers/:customerId
+    CUS->>CUSDB: findById(customerId)
+    CUSDB-->>CUS: Customer document con id email phone firstName
+    CUS-->>OS: Optional con CustomerResponse
+
+    Note over OS: Paso 3 - Obtener carrito via Feign critico
+    OS->>CAR: GET /api/v1/cart/:customerId
+    CAR->>CARDB: findByCustomerId(customerId)
+    CARDB-->>CAR: Cart document con lista de items
+    CAR-->>OS: CartResponse con cartItems
+
+    Note over OS: Paso 4 - Enriquecer cada item con datos de producto via Feign
+    loop Para cada cartItem en el carrito
+        OS->>PRO: GET /api/v1/products/variants/:variantId
+        PRO->>PRODB: findById(variantId)
+        PRODB-->>PRO: ProductVariant con sku productName price
+        PRO-->>OS: Optional con ProductResponse
+        OS->>OS: Construye OrderItem con variantId sku nombre qty unitPrice
+    end
+    OS->>OS: Calcula totalAmount sumando unitPrice por quantity
+
+    Note over OS: Paso 5 - Persistir orden con status PENDING
+    OS->>ODB: INSERT en orders con customerId totalAmount status PENDING
+    OS->>ODB: INSERT en order_items con variantId sku nombre qty unitPrice
+    ODB-->>OS: savedOrder con id=42 y status=PENDING
+
+    Note over OS: Paso 6 - Descontar stock con pessimistic lock via Feign critico
+    OS->>PRO: POST /api/v1/products/purchase con lista de variantId y qty
+    PRO->>PRODB: SELECT FOR UPDATE bloquea filas de variantes
+    Note over PRODB: Pessimistic lock evita race conditions entre checkouts concurrentes
+    PRODB-->>PRO: Variantes bloqueadas y disponibles
+    PRO->>PRODB: UPDATE stock menos qty por cada variante
+    PRODB-->>PRO: Stock actualizado OK
+    PRO-->>OS: 200 OK stock descontado correctamente
+
+    Note over OS: Paso 7 - Limpiar carrito via Feign no critico
+    OS->>CAR: DELETE /api/v1/cart/:customerId
+    CAR->>CARDB: deleteByCustomerId(customerId)
+    CARDB-->>CAR: Carrito eliminado OK
+    CAR-->>OS: 200 OK
+
+    Note over OS: Paso 8 - Procesar pago via Feign critico
+    OS->>PAY: POST /api/v1/payments con orderId customerId amount paymentMethod
+    PAY->>PAYDB: INSERT payments con status PROCESSING
+    PAYDB-->>PAY: Payment creado con id=7
+    PAY->>PAY: Simula procesamiento del pago exitoso
+    PAY->>PAYDB: UPDATE payments SET status COMPLETED
+    PAYDB-->>PAY: OK
+    PAY--)KF: kafkaTemplate.send topic order-confirmed con orderId customerId amount paymentMethod
+    Note over KF: Publicacion asincrona no bloquea el flujo principal
+    PAY-->>OS: PaymentResponse con status COMPLETED
+
+    Note over OS: Paso 9 - Confirmar orden
+    OS->>ODB: UPDATE orders SET status CONFIRMED WHERE id=42
+    ODB-->>OS: Orden confirmada OK
+    OS-->>OC: Retorna orderId=42
+    OC-->>GW: 200 OK con body orderId=42
+    GW-->>C: 200 OK con orderId=42
+
+    Note over KF,TW: FLUJO ASINCRONO desacoplado del request principal
+
+    KF--)NS: OrderConfirmedEvent orderId=42 customerId amount=150 paymentMethod=CREDIT_CARD
+    Note over NS: KafkaListener topic=order-confirmed groupId=notification-group
+    NS->>NS: NotificationConsumer.consume llama a notificationService.sendOrderConfirmation
+
+    Note over NS: Obtener datos del cliente para armar la notificacion
+    NS->>CUS: GET /api/v1/customers/:customerId
+    CUS->>CUSDB: findById(customerId)
+    CUSDB-->>CUS: Customer document
+    CUS-->>NS: CustomerResponse con email phone firstName
+
+    Note over NS: Strategy Pattern itera sobre lista de NotificationChannel
+    NS->>SMTP: EmailChannel.send SimpleMailMessage al email del cliente
+    SMTP-->>NS: Email enviado correctamente SENT
+
+    alt customer.phone no es nulo
+        NS->>TW: WhatsAppChannel Message.creator al numero whatsapp del cliente
+        TW-->>NS: WhatsApp enviado correctamente SENT
+    else Sin numero de telefono registrado
+        NS->>NS: WhatsAppChannel retorna SKIPPED
+    end
+
+    NS->>NODB: INSERT notifications con orderId=42 email status=SENT sentAt
+    NODB-->>NS: Notificacion persistida OK
+    </pre>
+  </div>
+
+  <h2 class="section-title">Flujos de compensacion (Saga)</h2>
+  <div class="error-flows">
+
+    <div class="error-card">
+      <h4>JWT invalido o expirado <span class="error-badge">401</span></h4>
+      <ol>
+        <li>Gateway recibe request con token invalido o expirado</li>
+        <li><code>AuthHeaderFilter</code> llama a <code>JwtUtil.isValid(token)</code> y retorna false</li>
+        <li>Gateway retorna <code>401 Unauthorized</code> inmediatamente</li>
+        <li>Request nunca llega a ningun microservicio</li>
+      </ol>
+    </div>
+
+    <div class="error-card">
+      <h4>Rate limit superado <span class="error-badge">429</span></h4>
+      <ol>
+        <li>IP supera el limite: 2 req/s, burst maximo 5 para /orders</li>
+        <li>Redis reporta bucket vacio</li>
+        <li>Gateway retorna <code>429 Too Many Requests</code></li>
+        <li>Request nunca llega al Order MS</li>
+      </ol>
+    </div>
+
+    <div class="error-card">
+      <h4>Cliente o carrito no encontrado <span class="error-badge">400</span></h4>
+      <ol>
+        <li><code>OrderService</code> llama a CustomerMS via Feign</li>
+        <li>Fallback o respuesta 404 retorna <code>Optional.empty()</code></li>
+        <li>Service lanza <code>OrderException("Customer does not exist")</code></li>
+        <li>No se creo ninguna orden, no hay nada que compensar</li>
+        <li>Retorna <code>400 Bad Request</code></li>
+      </ol>
+    </div>
+
+    <div class="error-card">
+      <h4>Stock insuficiente con compensacion <span class="error-badge">400</span></h4>
+      <ol>
+        <li>Orden creada con <code>status=PENDING</code> en PostgreSQL</li>
+        <li>ProductMS adquiere pessimistic lock y detecta stock insuficiente</li>
+        <li>ProductMS lanza excepcion que Feign propaga a OrderService</li>
+        <li><strong>Compensacion:</strong> <code>UPDATE orders SET status=CANCELLED</code></li>
+        <li>Retorna <code>400 Bad Request</code></li>
+        <li>El carrito NO fue limpiado y permanece intacto</li>
+      </ol>
+    </div>
+
+    <div class="error-card">
+      <h4>Pago fallido con compensacion <span class="error-badge">400</span></h4>
+      <ol>
+        <li>Stock ya descontado, carrito ya limpiado</li>
+        <li>PaymentMS falla al procesar el pago</li>
+        <li><strong>Compensacion 1:</strong> <code>ProductClient.restockProducts()</code> devuelve stock</li>
+        <li><strong>Compensacion 2:</strong> <code>UPDATE orders SET status=CANCELLED</code></li>
+        <li>Retorna <code>400 Bad Request</code></li>
+        <li>El carrito fue limpiado y no se restaura (limitacion actual)</li>
+      </ol>
+    </div>
+
+    <div class="error-card">
+      <h4>Circuit Breaker abierto Resilience4j <span class="error-badge">400</span></h4>
+      <ol>
+        <li>Un microservicio downstream falla mas del 50% en ventana de 10 llamadas</li>
+        <li>Resilience4j abre el circuit breaker y espera 30s antes de reintentar</li>
+        <li>Feign invoca el Fallback que retorna <code>Optional.empty()</code></li>
+        <li>Service interpreta como servicio no disponible y lanza excepcion</li>
+        <li>La saga aplica compensacion segun el paso donde fallo</li>
+      </ol>
+    </div>
+
+  </div>
+
+  <h2 class="section-title">Notas tecnicas clave</h2>
+  <div class="description-card">
+    <h3>Transaccionalidad y consistencia</h3>
+    <p>
+      <strong>@Transactional en OrderService.checkout():</strong> garantiza atomicidad de los cambios en PostgreSQL (orden + items).
+      Sin embargo, las llamadas Feign a servicios externos no forman parte de esta transaccion local, por eso se necesita la Saga.
+      <br/><br/>
+      <strong>Pessimistic lock en Product MS:</strong> el <code>SELECT FOR UPDATE</code> previene que dos checkouts concurrentes
+      lean el mismo stock disponible al mismo tiempo. Sin este lock, dos usuarios podrian comprar el ultimo item simultaneamente.
+      <br/><br/>
+      <strong>Publicacion asincrona a Kafka:</strong> el <code>kafkaTemplate.send()</code> es non-blocking. Payment MS no espera
+      confirmacion de que Notification MS recibio el evento. El response al cliente llega en cuanto el pago es COMPLETED,
+      sin esperar que el email o WhatsApp sean enviados.
+      <br/><br/>
+      <strong>Propagacion de identidad sin JWT en microservicios:</strong> el API Gateway es el unico que valida el JWT.
+      Los microservicios reciben <code>X-Customer-Id</code> y <code>X-Customer-Role</code> como headers HTTP trusted
+      inyectados por el Gateway. El header original del caller es eliminado (stripped) antes de propagar el request.
+    </p>
+  </div>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    sequence: {
+      diagramMarginX: 30,
+      diagramMarginY: 20,
+      actorMargin: 50,
+      width: 140,
+      height: 50,
+      boxMargin: 10,
+      boxTextMargin: 5,
+      noteMargin: 10,
+      messageMargin: 25,
+      mirrorActors: true,
+      useMaxWidth: false
+    },
+    themeVariables: {
+      primaryColor: '#e8f4fd',
+      primaryTextColor: '#1a1a2e',
+      primaryBorderColor: '#0f3460',
+      lineColor: '#555',
+      secondaryColor: '#f5f7fa',
+      tertiaryColor: '#fff'
+    }
+  });
+</script>
+</body>
+</html>

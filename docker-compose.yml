@@ -28,8 +28,32 @@ services:
     networks:
       - microservices
 
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - microservices
+
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+    networks:
+      - microservices
+
   config-server:
-    build: 
+    build:
       context: ./config-server
       dockerfile: Dockerfile
     container_name: config-server
@@ -67,7 +91,7 @@ services:
     restart: on-failure
 
   customer-microservice:
-    build: 
+    build:
       context: ./microservices/customer-microservice
       dockerfile: Dockerfile
     container_name: customer-microservice
@@ -84,6 +108,10 @@ services:
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:${CONFIG_SERVER_PORT}
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:${EUREKA_SERVER_PORT}/eureka/
       - SPRING_MONGODB_URI=mongodb://${MONGO_DB_USERNAME}:${MONGO_DB_PASSWORD}@mongodb:${MONGO_DB_PORT}/${CUSTOMER_DB_NAME}?authSource=admin
+      - ZIPKIN_BASE_URL=http://zipkin:9411
+      # customer-microservice signs JWTs on login and verifies them on protected endpoints.
+      # Must match the value in api-gateway so both services accept the same tokens.
+      - JWT_SECRET=${JWT_SECRET}
     networks:
       - microservices
 
@@ -107,6 +135,7 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${POSTGRESQL_DB_PASSWORD}
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:${CONFIG_SERVER_PORT}
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:${EUREKA_SERVER_PORT}/eureka/
+      - ZIPKIN_BASE_URL=http://zipkin:9411
     networks:
       - microservices
 
@@ -129,12 +158,98 @@ services:
     environment:
       - SPRING_MONGODB_URI=mongodb://${MONGO_DB_USERNAME}:${MONGO_DB_PASSWORD}@mongodb:${MONGO_DB_PORT}/${CART_DB_NAME}?authSource=admin
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:${CONFIG_SERVER_PORT}
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:${EUREKA_SERVER_PORT}/eureka/ 
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:${EUREKA_SERVER_PORT}/eureka/
+      - ZIPKIN_BASE_URL=http://zipkin:9411
+    networks:
+      - microservices
+
+  order-microservice:
+    build:
+      context: ./microservices/order-microservice
+      dockerfile: Dockerfile
+    container_name: order-microservice
+    depends_on:
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      postgresql:
+        condition: service_started
+    ports:
+      - "${ORDER_MICROSERVICE_PORT}:8094"
+    environment:
+      - SPRING_DATASOURCE_ORDER_URL=jdbc:postgresql://postgresql:${POSTGRESQL_DB_PORT}/${ORDER_DB_NAME}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRESQL_DB_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRESQL_DB_PASSWORD}
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:${CONFIG_SERVER_PORT}
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:${EUREKA_SERVER_PORT}/eureka/
+      - ZIPKIN_BASE_URL=http://zipkin:9411
+    networks:
+      - microservices
+
+  payment-microservice:
+    build:
+      context: ./microservices/payment-microservice
+      dockerfile: Dockerfile
+    container_name: payment-microservice
+    depends_on:
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      postgresql:
+        condition: service_started
+      kafka:
+        condition: service_started
+    ports:
+      - "${PAYMENT_MICROSERVICE_PORT}:8095"
+    environment:
+      - SPRING_DATASOURCE_PAYMENT_URL=jdbc:postgresql://postgresql:${POSTGRESQL_DB_PORT}/${PAYMENT_DB_NAME}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRESQL_DB_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRESQL_DB_PASSWORD}
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:${CONFIG_SERVER_PORT}
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:${EUREKA_SERVER_PORT}/eureka/
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - ZIPKIN_BASE_URL=http://zipkin:9411
+    networks:
+      - microservices
+
+  notification-microservice:
+    build:
+      context: ./microservices/notification-microservice
+      dockerfile: Dockerfile
+    container_name: notification-microservice
+    depends_on:
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+      kafka:
+        condition: service_started
+    ports:
+      - "${NOTIFICATION_MICROSERVICE_PORT}:8096"
+    environment:
+      - SPRING_MONGODB_URI=mongodb://${MONGO_DB_USERNAME}:${MONGO_DB_PASSWORD}@mongodb:${MONGO_DB_PORT}/${NOTIFICATION_DB_NAME}?authSource=admin
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:${CONFIG_SERVER_PORT}
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:${EUREKA_SERVER_PORT}/eureka/
+      - MAIL_HOST=${MAIL_HOST}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - ZIPKIN_BASE_URL=http://zipkin:9411
+      # Twilio credentials for WhatsApp notifications.
+      # Obtain from https://console.twilio.com — Account SID and Auth Token.
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_WHATSAPP_FROM=${TWILIO_WHATSAPP_FROM}
     networks:
       - microservices
 
   api-gateway:
-    build: 
+    build:
       context: ./api-gateway
       dockerfile: Dockerfile
     container_name: api-gateway
@@ -143,11 +258,65 @@ services:
         condition: service_healthy
       discovery-server:
         condition: service_healthy
+    # Bound to 127.0.0.1 so the gateway is only reachable through nginx.
+    # External clients must go through port 443 — direct access to 8222 is blocked.
     ports:
-      - "${API_GATEWAY_PORT}:8222"
+      - "127.0.0.1:${API_GATEWAY_PORT}:8222"
     environment:
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:${CONFIG_SERVER_PORT}
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:${EUREKA_SERVER_PORT}/eureka/
+      - ZIPKIN_BASE_URL=http://zipkin:9411
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CORS_ALLOWED_ORIGINS=https://${DOMAIN_NAME}
+      # api-gateway validates every incoming JWT. Must match the secret used by
+      # customer-microservice to sign tokens, otherwise all authenticated requests fail.
+      - JWT_SECRET=${JWT_SECRET}
+    networks:
+      - microservices
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates
+      # Certbot writes challenge tokens here; nginx serves them on port 80.
+      - ./nginx/certbot/www:/var/www/certbot:ro
+      # Shared certificate store — certbot writes, nginx reads.
+      - ./nginx/certbot/conf:/etc/letsencrypt:ro
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      # Restrict envsubst to only DOMAIN_NAME so nginx variables like $host
+      # and $remote_addr are not accidentally substituted during template rendering.
+      - NGINX_ENVSUBST_TEMPLATE_VARIABLES=DOMAIN_NAME
+    # Reload nginx every 6 hours so it picks up certificates renewed by certbot.
+    # Let's Encrypt certificates are valid 90 days; certbot renews at <30 days left.
+    # The 6-hour window guarantees nginx is never serving a cert expired mid-day.
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    depends_on:
+      - api-gateway
+    networks:
+      - microservices
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/certbot/www:/var/www/certbot
+    # Attempt renewal every 12 hours. certbot skips the request when the certificate
+    # still has more than 30 days left, so this loop is effectively a no-op most days.
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'"
+
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    ports:
+      - "9411:9411"
     networks:
       - microservices
 
@@ -166,6 +335,7 @@ services:
       - "${GRAFANA_PORT}:3000"
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}

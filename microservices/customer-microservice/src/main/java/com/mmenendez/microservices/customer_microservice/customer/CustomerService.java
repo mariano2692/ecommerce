@@ -2,8 +2,11 @@ package com.mmenendez.microservices.customer_microservice.customer;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import com.mmenendez.microservices.customer_microservice.exceptions.CustomerAlreadyExistsException;
 import com.mmenendez.microservices.customer_microservice.exceptions.CustomerNotFoundException;
 
 import lombok.RequiredArgsConstructor;
@@ -16,8 +19,13 @@ public class CustomerService {
     private final CustomerMapper mapper;
 
     public String saveCustomer(CustomerRequest request) {
-       var customer = repository.save(mapper.toCustomer(request));  
-       return customer.getId();
+        repository.findByEmail(request.email()).ifPresent(existing -> {
+            // En update, el email puede ser el mismo del propio customer — eso está permitido
+            if (request.id() == null || !existing.getId().equals(request.id())) {
+                throw new CustomerAlreadyExistsException("Email " + request.email() + " is already in use");
+            }
+        });
+        return repository.save(mapper.toCustomer(request)).getId();
     }
 
     public CustomerResponse getCustomerById(String customerId) {
@@ -28,11 +36,10 @@ public class CustomerService {
                 String.format("Customer with id %s not found", customerId)));
     }
 
-    public List<CustomerResponse> getCustomers() {
+    public Page<CustomerResponse> getCustomers(int page, int size) {
         return repository
-            .findAll().stream()
-            .map(mapper::toCustomerResponse)
-            .toList();
+            .findAll(PageRequest.of(page, size))
+            .map(mapper::toCustomerResponse);
     }
 
     public void deleteCustomerById(String customerId) {
